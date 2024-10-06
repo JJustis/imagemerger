@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Stenography Merge and Save</title>
+    <!-- Include Bootstrap for styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        #mergedCanvas {
+            border: 1px solid #333;
+            display: block;
+            margin: 20px auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Stenographic Image Merge and Save</h1>
+        <!-- Input fields for image URLs -->
+        <div class="mb-3">
+            <label for="imageLinkA" class="form-label">Image A URL:</label>
+            <input type="text" id="imageLinkA" class="form-control" placeholder="Enter URL of Image A">
+        </div>
+        <div class="mb-3">
+            <label for="imageLinkB" class="form-label">Image B URL:</label>
+            <input type="text" id="imageLinkB" class="form-control" placeholder="Enter URL of Image B">
+        </div>
+        <button id="loadImagesButton" class="btn btn-primary mb-4">Load and Merge Images</button>
+        
+        <!-- Canvas for displaying merged image -->
+        <canvas id="mergedCanvas"></canvas>
+        <br/>
+        <!-- Save button to download the merged image -->
+        <button id="saveButton" class="btn btn-success">Save as PNG</button>
+    </div>
+
+    <!-- Bootstrap JS (for styling purposes, not necessary for functionality) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        const mergedCanvas = document.getElementById('mergedCanvas');
+        const mergedCtx = mergedCanvas.getContext('2d');
+
+        // Load images from URLs provided by the user
+        document.getElementById('loadImagesButton').addEventListener('click', function() {
+            const imageLinkA = document.getElementById('imageLinkA').value;
+            const imageLinkB = document.getElementById('imageLinkB').value;
+            
+            if (!imageLinkA || !imageLinkB) {
+                alert("Please provide both Image A and Image B URLs.");
+                return;
+            }
+
+            // Create Image objects for both URLs
+            const imgA = new Image();
+            const imgB = new Image();
+
+            imgA.crossOrigin = "Anonymous"; // Allow cross-origin image loading
+            imgB.crossOrigin = "Anonymous"; // Allow cross-origin image loading
+
+            imgA.src = imageLinkA;
+            imgB.src = imageLinkB;
+
+            imgA.onload = function() {
+                imgB.onload = function() {
+                    // Create canvas contexts for both images
+                    const canvasA = document.createElement('canvas');
+                    const canvasB = document.createElement('canvas');
+
+                    canvasA.width = imgA.width;
+                    canvasA.height = imgA.height;
+                    canvasB.width = imgB.width;
+                    canvasB.height = imgB.height;
+
+                    const ctxA = canvasA.getContext('2d');
+                    const ctxB = canvasB.getContext('2d');
+
+                    // Draw the images onto separate canvases
+                    ctxA.drawImage(imgA, 0, 0);
+                    ctxB.drawImage(imgB, 0, 0);
+
+                    // Set merged canvas size
+                    mergedCanvas.width = Math.max(imgA.width, imgB.width);
+                    mergedCanvas.height = Math.max(imgA.height, imgB.height);
+
+                    // Get image data for both images
+                    const imgDataA = ctxA.getImageData(0, 0, imgA.width, imgA.height);
+                    const imgDataB = ctxB.getImageData(0, 0, imgB.width, imgB.height);
+
+                    const blendedImageData = mergedCtx.createImageData(mergedCanvas.width, mergedCanvas.height);
+
+                    // Function to blend along overlapping lines
+                    function blendImagesAlongLines(dataA, dataB, resultData) {
+                        for (let i = 0; i < resultData.data.length; i += 4) {
+                            const x = (i / 4) % mergedCanvas.width;
+                            const y = Math.floor(i / 4 / mergedCanvas.width);
+
+                            // Condition for overlapping lines: Use a threshold or gradient blend based on position
+                            if (x < Math.min(imgA.width, imgB.width) && y < Math.min(imgA.height, imgB.height)) {
+                                // Blend the pixels along the overlap region
+                                const blendFactor = (x / mergedCanvas.width) * 0.5 + (y / mergedCanvas.height) * 0.5;
+                                resultData.data[i] = (dataA.data[i] * (1 - blendFactor) + dataB.data[i] * blendFactor);
+                                resultData.data[i + 1] = (dataA.data[i + 1] * (1 - blendFactor) + dataB.data[i + 1] * blendFactor);
+                                resultData.data[i + 2] = (dataA.data[i + 2] * (1 - blendFactor) + dataB.data[i + 2] * blendFactor);
+                                resultData.data[i + 3] = 255; // Full opacity
+                            } else if (x < imgA.width && y < imgA.height) {
+                                // Non-overlapping region from image A
+                                resultData.data[i] = dataA.data[i];
+                                resultData.data[i + 1] = dataA.data[i + 1];
+                                resultData.data[i + 2] = dataA.data[i + 2];
+                                resultData.data[i + 3] = 255;
+                            } else if (x < imgB.width && y < imgB.height) {
+                                // Non-overlapping region from image B
+                                resultData.data[i] = dataB.data[i];
+                                resultData.data[i + 1] = dataB.data[i + 1];
+                                resultData.data[i + 2] = dataB.data[i + 2];
+                                resultData.data[i + 3] = 255;
+                            }
+                        }
+                    }
+
+                    // Blend images along overlapping lines
+                    blendImagesAlongLines(imgDataA, imgDataB, blendedImageData);
+
+                    // Put the blended image data onto the merged canvas
+                    mergedCtx.putImageData(blendedImageData, 0, 0);
+                };
+            };
+        });
+
+        // Save the canvas image as PNG when the button is clicked
+        document.getElementById('saveButton').onclick = function() {
+            const link = document.createElement('a');
+            link.download = 'merged_image.png';
+            link.href = mergedCanvas.toDataURL('image/png');
+            link.click();
+        };
+    </script>
+</body>
+</html>
